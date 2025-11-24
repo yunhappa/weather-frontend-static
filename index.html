@@ -14,6 +14,11 @@
         .bg-gradient-mood {
             background-image: linear-gradient(135deg, var(--color-start), var(--color-end));
         }
+        /* 로딩 중 이모지 바운스 효과 */
+        @keyframes bounce-slow {
+            0%, 100% { transform: translateY(-5px); }
+            50% { transform: translateY(5px); }
+        }
     </style>
 </head>
 <body class="bg-gray-50 flex flex-col items-center justify-center min-h-screen p-4">
@@ -21,19 +26,20 @@
     <!-- 메인 카드 컨테이너 -->
     <div id="weather-card" class="w-full max-w-lg bg-white rounded-xl shadow-2xl p-6 md:p-8 transform transition duration-500 ease-in-out hover:shadow-3xl hover:-translate-y-1">
         
-        <h1 class="text-3xl md:text-4xl font-extrabold text-gray-800 mb-2" id="city-name">서울의 오늘의 분위기</h1>
+        <h1 class="text-3xl md:text-4xl font-extrabold text-gray-800 mb-2" id="city-name">날씨 분위기 플레이리스트</h1>
         <p class="text-sm text-gray-500 mb-6">OpenWeatherMap 기반 음악 분위기 추천</p>
 
         <!-- 로딩 상태 표시 -->
         <div id="loading" class="text-center py-12">
             <div class="animate-spin rounded-full h-10 w-10 border-b-2 border-indigo-500 mx-auto mb-4"></div>
             <p class="text-gray-600 font-semibold">날씨 정보를 분석하고 분위기를 찾는 중...</p>
+            <div id="loading-emoji" class="text-5xl mt-4" style="animation: bounce-slow 1.5s infinite;">🎵</div>
         </div>
 
         <!-- 결과 표시 섹션 -->
         <div id="result-content" class="text-center" style="display: none;">
             
-            <div id="mood-emoji" class="text-7xl mb-4 animate-pulse"></div>
+            <div id="mood-emoji" class="text-7xl mb-4"></div>
             
             <p id="current-temp" class="text-lg font-semibold text-indigo-600 mb-2"></p>
 
@@ -61,6 +67,7 @@
     <script>
         // 이 부분을 반드시 사용자님의 실제 Azure Function URL로 교체하세요!
         const AZURE_FUNCTION_URL = "https://weather-forecast-aqcfdphpe6hkcxd9.koreacentral-01.azurewebsites.net/api/HttpTrigger1";
+        const MIN_LOADING_TIME = 5000; // 최소 로딩 시간: 5000ms = 5초
         
         const moodColorMap = {
             "감성적인 발라드": { start: '#6A5ACD', end: '#483D8B' },
@@ -77,69 +84,80 @@
             const resultContent = document.getElementById('result-content');
             const errorMsg = document.getElementById('error-message');
             const body = document.body;
+            
+            // 1. 데이터 로딩 시작 및 시간 기록
+            const startTime = Date.now();
+            let data = null;
+            let error = null;
 
-            // Show loading and hide results/error
+            // Show loading
             loading.style.display = 'block';
             resultContent.style.display = 'none';
             errorMsg.style.display = 'none';
-            
-            // Initial background style reset
-            body.style.setProperty('--color-start', '#F3F4F6');
-            body.style.setProperty('--color-end', '#F3F4F6');
             body.className = 'bg-gray-100 flex flex-col items-center justify-center min-h-screen p-4';
-
 
             try {
                 const response = await fetch(AZURE_FUNCTION_URL);
                 if (!response.ok) {
                     throw new Error(`HTTP error! status: ${response.status}`);
                 }
-                const data = await response.json();
-                const rec = data.recommendation;
+                data = await response.json();
+            } catch (err) {
+                error = err;
+                console.error("음악 추천 데이터를 가져오는 중 오류 발생:", error);
+            }
+            
+            // 2. 최소 대기 시간 계산
+            const elapsedTime = Date.now() - startTime;
+            const remainingTime = Math.max(0, MIN_LOADING_TIME - elapsedTime);
 
-                document.getElementById('city-name').innerText = `${data.city}의 ${rec.mood} 분위기`;
-                document.getElementById('current-temp').innerText = `현재 기온: ${data.current_temp_c}°C`;
-                document.getElementById('mood-emoji').innerText = rec.emoji;
-                document.getElementById('current-mood').innerText = rec.mood;
-                document.getElementById('mood-description').innerText = rec.description;
+            // 3. 최소 대기 시간이 지날 때까지 기다린 후 결과 표시
+            setTimeout(() => {
+                loading.style.display = 'none';
 
-                // Playlist list creation
-                const playlistList = document.getElementById('playlist-list');
-                playlistList.innerHTML = '';
-                if (rec.playlist && rec.playlist.length > 0) {
-                    rec.playlist.forEach(item => {
-                        const li = document.createElement('li');
-                        li.className = 'flex items-center space-x-2 text-gray-700 font-medium bg-gray-50 p-2 rounded-lg transition duration-150 hover:bg-gray-200';
-                        // Icon (SVG for music note)
-                        li.innerHTML = `<svg class="w-5 h-5 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19V6l12-3v14c0 1.657-1.343 3-3 3H9zM9 19c0 1.657-1.343 3-3 3s-3-1.343-3-3 1.343-3 3-3 3 1.343 3 3zM12 4v10c0 1.657-1.343 3-3 3"></path></svg><span>${item}</span>`;
-                        playlistList.appendChild(li);
-                    });
-                } else {
-                    playlistList.innerHTML = '<li class="text-gray-500">추천된 플레이리스트 테마가 없습니다.</li>';
+                if (error) {
+                    errorMsg.style.display = 'block';
+                    return;
                 }
 
-                // Apply mood gradient and background color
-                const colorSet = moodColorMap[rec.mood] || moodColorMap["정보 부족"];
-                const moodBox = document.getElementById('mood-box');
-                
-                // Set CSS variables for gradient
-                moodBox.style.setProperty('--color-start', colorSet.start);
-                moodBox.style.setProperty('--color-end', colorSet.end);
-                
-                // Update body background color using a Tailwind dynamic color
-                const bodyColorEnd = colorSet.end.replace('#', '');
-                body.className = `bg-[${bodyColorEnd}]/10 flex flex-col items-center justify-center min-h-screen p-4`;
+                if (data) {
+                    const rec = data.recommendation;
+                    
+                    document.getElementById('city-name').innerText = `${data.city}의 ${rec.mood} 분위기`;
+                    document.getElementById('current-temp').innerText = `현재 기온: ${data.current_temp_c}°C`;
+                    document.getElementById('mood-emoji').innerText = rec.emoji;
+                    document.getElementById('current-mood').innerText = rec.mood;
+                    document.getElementById('mood-description').innerText = rec.description;
 
+                    // Playlist list creation
+                    const playlistList = document.getElementById('playlist-list');
+                    playlistList.innerHTML = '';
+                    if (rec.playlist && rec.playlist.length > 0) {
+                        rec.playlist.forEach(item => {
+                            const li = document.createElement('li');
+                            li.className = 'flex items-center space-x-2 text-gray-700 font-medium bg-gray-50 p-2 rounded-lg transition duration-150 hover:bg-gray-200';
+                            li.innerHTML = `<svg class="w-5 h-5 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19V6l12-3v14c0 1.657-1.343 3-3 3H9zM9 19c0 1.657-1.343 3-3 3s-3-1.343-3-3 1.343-3 3-3 3 1.343 3 3zM12 4v10c0 1.657-1.343 3-3 3"></path></svg><span>${item}</span>`;
+                            playlistList.appendChild(li);
+                        });
+                    } else {
+                        playlistList.innerHTML = '<li class="text-gray-500">추천된 플레이리스트 테마가 없습니다.</li>';
+                    }
 
-            } catch (error) {
-                console.error("음악 추천 데이터를 가져오는 중 오류 발생:", error);
-                errorMsg.style.display = 'block';
-            } finally {
-                loading.style.display = 'none';
-                if(errorMsg.style.display !== 'block') {
+                    // Apply mood gradient and background color
+                    const colorSet = moodColorMap[rec.mood] || moodColorMap["정보 부족"];
+                    const moodBox = document.getElementById('mood-box');
+                    
+                    // Set CSS variables for gradient
+                    moodBox.style.setProperty('--color-start', colorSet.start);
+                    moodBox.style.setProperty('--color-end', colorSet.end);
+                    
+                    // Update body background color
+                    const bodyColorEnd = colorSet.end.replace('#', '');
+                    body.className = `bg-[${bodyColorEnd}]/10 flex flex-col items-center justify-center min-h-screen p-4`;
+                    
                     resultContent.style.display = 'block';
                 }
-            }
+            }, remainingTime);
         }
         
         // Run on page load
@@ -148,3 +166,4 @@
     </script>
 </body>
 </html>
+
