@@ -3,98 +3,91 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>오늘의 야외 활동 조언</title>
-    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;700&display=swap" rel="stylesheet">
+    <title>날씨 분위기 플레이리스트</title>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;700;900&display=swap" rel="stylesheet">
+    <script src="https://cdn.tailwindcss.com"></script>
     <style>
         body {
             font-family: 'Noto Sans KR', sans-serif;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            min-height: 100vh;
-            margin: 0;
-            background-color: #f0f4f8; /* 기본 배경색 */
-            transition: background-color 1s ease-in-out;
-            color: #333;
-            text-align: center;
-            flex-direction: column;
+            transition: background-color 0.8s ease-in-out;
         }
-        .weather-card {
-            background-color: #fff;
-            border-radius: 15px;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
-            padding: 40px;
-            max-width: 600px;
-            width: 90%;
-            transition: transform 0.3s ease-in-out;
+        .bg-gradient-mood {
+            background-image: linear-gradient(135deg, var(--color-start), var(--color-end));
         }
-        .weather-card:hover {
-            transform: translateY(-5px);
-        }
-        #city-name {
-            font-size: 2.2em;
-            font-weight: 700;
-            color: #2c3e50;
-            margin-bottom: 10px;
-        }
-        #weather-icon {
-            font-size: 5em;
-            margin: 20px 0;
-            animation: bounce 0.8s infinite alternate;
-        }
-        @keyframes bounce {
-            from { transform: translateY(0); }
-            to { transform: translateY(-10px); }
-        }
-        #main-advice {
-            font-size: 1.8em;
-            font-weight: 700;
-            color: #2980b9;
-            margin-bottom: 20px;
-            line-height: 1.4;
-        }
-        #detail-advice {
-            font-size: 1.1em;
-            color: #7f8c8d;
-            line-height: 1.6;
-        }
-        #loading {
-            font-size: 1.5em;
-            color: #555;
-        }
-        .footer {
-            margin-top: 30px;
-            font-size: 0.9em;
-            color: #aaa;
-        }
-
-        /* 날씨별 배경색 (예시) */
-        body.sunny { background-color: #87CEEB; } /* SkyBlue */
-        body.cloudy { background-color: #BDC3C7; } /* Silver */
-        body.rainy { background-color: #708090; }  /* SlateGray */
-        body.snowy { background-color: #E0FFFF; }  /* LightCyan */
-        body.bad-weather { background-color: #FF6347; } /* Tomato */
     </style>
 </head>
-<body>
-    <div class="weather-card">
-        <p id="city-name">날씨 정보 로딩 중...</p>
-        <div id="weather-icon">☁️</div>
-        <h2 id="main-advice"></h2>
-        <p id="detail-advice"></p>
-        <div id="loading" style="display: none;">데이터를 가져오는 중...</div>
-    </div>
-    <div class="footer">
-        OpenWeatherMap API 기반 정보 제공
+<body class="bg-gray-50 flex flex-col items-center justify-center min-h-screen p-4">
+
+    <!-- 메인 카드 컨테이너 -->
+    <div id="weather-card" class="w-full max-w-lg bg-white rounded-xl shadow-2xl p-6 md:p-8 transform transition duration-500 ease-in-out hover:shadow-3xl hover:-translate-y-1">
+        
+        <h1 class="text-3xl md:text-4xl font-extrabold text-gray-800 mb-2" id="city-name">서울의 오늘의 분위기</h1>
+        <p class="text-sm text-gray-500 mb-6">OpenWeatherMap 기반 음악 분위기 추천</p>
+
+        <!-- 로딩 상태 표시 -->
+        <div id="loading" class="text-center py-12">
+            <div class="animate-spin rounded-full h-10 w-10 border-b-2 border-indigo-500 mx-auto mb-4"></div>
+            <p class="text-gray-600 font-semibold">날씨 정보를 분석하고 분위기를 찾는 중...</p>
+        </div>
+
+        <!-- 결과 표시 섹션 -->
+        <div id="result-content" class="text-center" style="display: none;">
+            
+            <div id="mood-emoji" class="text-7xl mb-4 animate-pulse"></div>
+            
+            <p id="current-temp" class="text-lg font-semibold text-indigo-600 mb-2"></p>
+
+            <div id="mood-box" class="bg-gradient-mood rounded-lg p-4 shadow-lg mb-6 text-white">
+                <p class="text-base font-medium opacity-80" id="mood-description"></p>
+                <h2 id="current-mood" class="text-3xl font-black mt-1"></h2>
+            </div>
+            
+            <!-- 추천 플레이리스트 -->
+            <div class="text-left">
+                <h3 class="text-xl font-bold text-gray-700 mb-3 border-b pb-1">🎶 추천 플레이리스트 테마</h3>
+                <ul id="playlist-list" class="space-y-2">
+                    <!-- 플레이리스트 항목이 여기에 삽입됩니다 -->
+                </ul>
+            </div>
+        </div>
+
+        <!-- 에러 메시지 -->
+        <div id="error-message" class="text-center py-12 text-red-500 font-bold" style="display: none;">
+            데이터를 가져오는 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요.
+        </div>
+
     </div>
 
     <script>
-        // TODO: 여기에 실제 Azure Function의 HTTP 트리거 URL을 붙여넣으세요.
-        const AZURE_FUNCTION_URL = "https://weather-forecast-aqcfdphpe6hkcxd9.koreacentral-01.azurewebsites.net/api/HttpTrigger1"; 
+        // 이 부분을 반드시 사용자님의 실제 Azure Function URL로 교체하세요!
+        const AZURE_FUNCTION_URL = "https://black-water-08d5f3e00.3.azurestaticapps.net";
+        
+        const moodColorMap = {
+            "감성적인 발라드": { start: '#6A5ACD', end: '#483D8B' },
+            "따뜻한 재즈와 캐롤": { start: '#E0FFFF', end: '#B0C4DE' },
+            "시원하고 청량한 썸머 댄스": { start: '#4682B4', end: '#87CEFA' },
+            "활기찬 인디 팝": { start: '#FFD700', end: '#FFA500' },
+            "몽환적인 시네마틱": { start: '#A9A9A9', end: '#778899' },
+            "평온하고 차분한": { start: '#9370DB', end: '#8A2BE2' },
+            "정보 부족": { start: '#E5E7EB', end: '#D1D5DB' }
+        };
 
-        async function getLeisureAdvice() {
-            const loadingElement = document.getElementById('loading');
-            loadingElement.style.display = 'block';
+        async function getMusicRecommendation() {
+            const loading = document.getElementById('loading');
+            const resultContent = document.getElementById('result-content');
+            const errorMsg = document.getElementById('error-message');
+            const body = document.body;
+
+            // Show loading and hide results/error
+            loading.style.display = 'block';
+            resultContent.style.display = 'none';
+            errorMsg.style.display = 'none';
+            
+            // Initial background style reset
+            body.style.setProperty('--color-start', '#F3F4F6');
+            body.style.setProperty('--color-end', '#F3F4F6');
+            body.className = 'bg-gray-100 flex flex-col items-center justify-center min-h-screen p-4';
+
 
             try {
                 const response = await fetch(AZURE_FUNCTION_URL);
@@ -102,56 +95,56 @@
                     throw new Error(`HTTP error! status: ${response.status}`);
                 }
                 const data = await response.json();
-                
-                document.getElementById('city-name').innerText = data.city ? `${data.city}의 오늘 날씨` : '알 수 없는 지역';
+                const rec = data.recommendation;
 
-                const [conclusion, detailAdvice] = data.advice.split('\n\n[상세 조언]');
-                document.getElementById('main-advice').innerText = conclusion.trim();
-                document.getElementById('detail-advice').innerText = detailAdvice ? detailAdvice.trim() : '';
-                
-                // 날씨 아이콘 및 배경 변경 (간단한 로직 예시)
-                let icon = '❓';
-                let bgColorClass = '';
+                document.getElementById('city-name').innerText = `${data.city}의 ${rec.mood} 분위기`;
+                document.getElementById('current-temp').innerText = `현재 기온: ${data.current_temp_c}°C`;
+                document.getElementById('mood-emoji').innerText = rec.emoji;
+                document.getElementById('current-mood').innerText = rec.mood;
+                document.getElementById('mood-description').innerText = rec.description;
 
-                if (conclusion.includes('최고의 야외 활동 조건!')) {
-                    icon = '☀️'; // 맑음
-                    bgColorClass = 'sunny';
-                } else if (conclusion.includes('괜찮은 활동 조건!')) {
-                    icon = '🌤️'; // 부분적으로 맑음/구름
-                    bgColorClass = 'cloudy';
-                } else if (conclusion.includes('야외 활동을 잠시 미루세요.')) {
-                     if (detailAdvice && detailAdvice.includes('비, 눈 또는 폭풍우')) {
-                        icon = '☔'; // 비
-                        bgColorClass = 'rainy';
-                    } else if (detailAdvice && detailAdvice.includes('안개')) {
-                        icon = '🌫️'; // 안개
-                        bgColorClass = 'cloudy'; // 안개도 구름과 유사한 분위기
-                    } else if (detailAdvice && detailAdvice.includes('바람이 매우 강합니다.')) {
-                        icon = '🌬️'; // 강풍
-                        bgColorClass = 'cloudy'; 
-                    } else {
-                        icon = '⚠️'; // 경고
-                        bgColorClass = 'bad-weather';
-                    }
+                // Playlist list creation
+                const playlistList = document.getElementById('playlist-list');
+                playlistList.innerHTML = '';
+                if (rec.playlist && rec.playlist.length > 0) {
+                    rec.playlist.forEach(item => {
+                        const li = document.createElement('li');
+                        li.className = 'flex items-center space-x-2 text-gray-700 font-medium bg-gray-50 p-2 rounded-lg transition duration-150 hover:bg-gray-200';
+                        // Icon (SVG for music note)
+                        li.innerHTML = `<svg class="w-5 h-5 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19V6l12-3v14c0 1.657-1.343 3-3 3H9zM9 19c0 1.657-1.343 3-3 3s-3-1.343-3-3 1.343-3 3-3 3 1.343 3 3zM12 4v10c0 1.657-1.343 3-3 3"></path></svg><span>${item}</span>`;
+                        playlistList.appendChild(li);
+                    });
+                } else {
+                    playlistList.innerHTML = '<li class="text-gray-500">추천된 플레이리스트 테마가 없습니다.</li>';
                 }
-                document.getElementById('weather-icon').innerText = icon;
-                document.body.className = bgColorClass; // 배경 클래스 변경
+
+                // Apply mood gradient and background color
+                const colorSet = moodColorMap[rec.mood] || moodColorMap["정보 부족"];
+                const moodBox = document.getElementById('mood-box');
+                
+                // Set CSS variables for gradient
+                moodBox.style.setProperty('--color-start', colorSet.start);
+                moodBox.style.setProperty('--color-end', colorSet.end);
+                
+                // Update body background color using a Tailwind dynamic color
+                const bodyColorEnd = colorSet.end.replace('#', '');
+                body.className = `bg-[${bodyColorEnd}]/10 flex flex-col items-center justify-center min-h-screen p-4`;
+
 
             } catch (error) {
-                console.error("날씨 데이터를 가져오는 중 오류 발생:", error);
-                document.getElementById('city-name').innerText = "정보를 가져올 수 없습니다.";
-                document.getElementById('main-advice').innerText = "잠시 후 다시 시도해주세요.";
-                document.getElementById('detail-advice').innerText = "";
-                document.getElementById('weather-icon').innerText = '❌';
-                document.body.className = 'bad-weather';
+                console.error("음악 추천 데이터를 가져오는 중 오류 발생:", error);
+                errorMsg.style.display = 'block';
             } finally {
-                loadingElement.style.display = 'none';
+                loading.style.display = 'none';
+                if(errorMsg.style.display !== 'block') {
+                    resultContent.style.display = 'block';
+                }
             }
         }
+        
+        // Run on page load
+        getMusicRecommendation();
 
-        getLeisureAdvice(); // 페이지 로드 시 함수 실행
-        // 5분마다 업데이트 (선택 사항)
-        // setInterval(getLeisureAdvice, 300 * 1000); 
     </script>
 </body>
 </html>
