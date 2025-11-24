@@ -79,6 +79,9 @@
             "정보 부족": { start: '#E5E7EB', end: '#D1D5DB' }
         };
 
+        // Promise를 반환하는 지연 함수 (delay(5000)처럼 await으로 사용할 수 있게 함)
+        const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+
         async function getMusicRecommendation() {
             const loading = document.getElementById('loading');
             const resultContent = document.getElementById('result-content');
@@ -97,67 +100,82 @@
             body.className = 'bg-gray-100 flex flex-col items-center justify-center min-h-screen p-4';
 
             try {
-                const response = await fetch(AZURE_FUNCTION_URL);
-                if (!response.ok) {
-                    throw new Error(`HTTP error! status: ${response.status}`);
+                // 병렬 실행을 위한 Promise 배열 생성
+                const fetchPromise = fetch(AZURE_FUNCTION_URL).then(response => {
+                    if (!response.ok) {
+                        throw new Error(`HTTP error! status: ${response.status}`);
+                    }
+                    return response.json();
+                });
+
+                // 최소 대기 시간 Promise
+                const minTimePromise = delay(MIN_LOADING_TIME);
+
+                // 두 Promise가 모두 완료될 때까지 기다림
+                const results = await Promise.allSettled([fetchPromise, minTimePromise]);
+                
+                // Fetch 결과를 분석
+                const fetchResult = results[0];
+
+                if (fetchResult.status === 'rejected') {
+                    throw fetchResult.reason;
                 }
-                data = await response.json();
+                
+                data = fetchResult.value;
+
             } catch (err) {
                 error = err;
-                console.error("음악 추천 데이터를 가져오는 중 오류 발생:", error);
+                // 최소 대기 시간은 보장하므로, 에러가 발생해도 최소 시간만큼은 대기
+                const elapsedTime = Date.now() - startTime;
+                const remainingTime = Math.max(0, MIN_LOADING_TIME - elapsedTime);
+                await delay(remainingTime);
             }
             
-            // 2. 최소 대기 시간 계산
-            const elapsedTime = Date.now() - startTime;
-            const remainingTime = Math.max(0, MIN_LOADING_TIME - elapsedTime);
+            // 4. 결과 표시
+            loading.style.display = 'none';
 
-            // 3. 최소 대기 시간이 지날 때까지 기다린 후 결과 표시
-            setTimeout(() => {
-                loading.style.display = 'none';
+            if (error) {
+                errorMsg.style.display = 'block';
+                return;
+            }
 
-                if (error) {
-                    errorMsg.style.display = 'block';
-                    return;
+            if (data) {
+                const rec = data.recommendation;
+                
+                document.getElementById('city-name').innerText = `${data.city}의 ${rec.mood} 분위기`;
+                document.getElementById('current-temp').innerText = `현재 기온: ${data.current_temp_c}°C`;
+                document.getElementById('mood-emoji').innerText = rec.emoji;
+                document.getElementById('current-mood').innerText = rec.mood;
+                document.getElementById('mood-description').innerText = rec.description;
+
+                // Playlist list creation
+                const playlistList = document.getElementById('playlist-list');
+                playlistList.innerHTML = '';
+                if (rec.playlist && rec.playlist.length > 0) {
+                    rec.playlist.forEach(item => {
+                        const li = document.createElement('li');
+                        li.className = 'flex items-center space-x-2 text-gray-700 font-medium bg-gray-50 p-2 rounded-lg transition duration-150 hover:bg-gray-200';
+                        li.innerHTML = `<svg class="w-5 h-5 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19V6l12-3v14c0 1.657-1.343 3-3 3H9zM9 19c0 1.657-1.343 3-3 3s-3-1.343-3-3 1.343-3 3-3 3 1.343 3 3zM12 4v10c0 1.657-1.343 3-3 3"></path></svg><span>${item}</span>`;
+                        playlistList.appendChild(li);
+                    });
+                } else {
+                    playlistList.innerHTML = '<li class="text-gray-500">추천된 플레이리스트 테마가 없습니다.</li>';
                 }
 
-                if (data) {
-                    const rec = data.recommendation;
-                    
-                    document.getElementById('city-name').innerText = `${data.city}의 ${rec.mood} 분위기`;
-                    document.getElementById('current-temp').innerText = `현재 기온: ${data.current_temp_c}°C`;
-                    document.getElementById('mood-emoji').innerText = rec.emoji;
-                    document.getElementById('current-mood').innerText = rec.mood;
-                    document.getElementById('mood-description').innerText = rec.description;
-
-                    // Playlist list creation
-                    const playlistList = document.getElementById('playlist-list');
-                    playlistList.innerHTML = '';
-                    if (rec.playlist && rec.playlist.length > 0) {
-                        rec.playlist.forEach(item => {
-                            const li = document.createElement('li');
-                            li.className = 'flex items-center space-x-2 text-gray-700 font-medium bg-gray-50 p-2 rounded-lg transition duration-150 hover:bg-gray-200';
-                            li.innerHTML = `<svg class="w-5 h-5 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19V6l12-3v14c0 1.657-1.343 3-3 3H9zM9 19c0 1.657-1.343 3-3 3s-3-1.343-3-3 1.343-3 3-3 3 1.343 3 3zM12 4v10c0 1.657-1.343 3-3 3"></path></svg><span>${item}</span>`;
-                            playlistList.appendChild(li);
-                        });
-                    } else {
-                        playlistList.innerHTML = '<li class="text-gray-500">추천된 플레이리스트 테마가 없습니다.</li>';
-                    }
-
-                    // Apply mood gradient and background color
-                    const colorSet = moodColorMap[rec.mood] || moodColorMap["정보 부족"];
-                    const moodBox = document.getElementById('mood-box');
-                    
-                    // Set CSS variables for gradient
-                    moodBox.style.setProperty('--color-start', colorSet.start);
-                    moodBox.style.setProperty('--color-end', colorSet.end);
-                    
-                    // Update body background color
-                    const bodyColorEnd = colorSet.end.replace('#', '');
-                    body.className = `bg-[${bodyColorEnd}]/10 flex flex-col items-center justify-center min-h-screen p-4`;
-                    
-                    resultContent.style.display = 'block';
-                }
-            }, remainingTime);
+                // Apply mood gradient and background color
+                const colorSet = moodColorMap[rec.mood] || moodColorMap["정보 부족"];
+                const moodBox = document.getElementById('mood-box');
+                
+                // Set CSS variables for gradient
+                moodBox.style.setProperty('--color-start', colorSet.start);
+                moodBox.style.setProperty('--color-end', colorSet.end);
+                
+                // Update body background color
+                const bodyColorEnd = colorSet.end.replace('#', '');
+                body.className = `bg-[${bodyColorEnd}]/10 flex flex-col items-center justify-center min-h-screen p-4`;
+                
+                resultContent.style.display = 'block';
+            }
         }
         
         // Run on page load
