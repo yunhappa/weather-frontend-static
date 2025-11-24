@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>오늘의 야외 활동 조언</title>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Noto Sans KR', sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+            background-color: #f0f4f8; /* 기본 배경색 */
+            transition: background-color 1s ease-in-out;
+            color: #333;
+            text-align: center;
+            flex-direction: column;
+        }
+        .weather-card {
+            background-color: #fff;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+            padding: 40px;
+            max-width: 600px;
+            width: 90%;
+            transition: transform 0.3s ease-in-out;
+        }
+        .weather-card:hover {
+            transform: translateY(-5px);
+        }
+        #city-name {
+            font-size: 2.2em;
+            font-weight: 700;
+            color: #2c3e50;
+            margin-bottom: 10px;
+        }
+        #weather-icon {
+            font-size: 5em;
+            margin: 20px 0;
+            animation: bounce 0.8s infinite alternate;
+        }
+        @keyframes bounce {
+            from { transform: translateY(0); }
+            to { transform: translateY(-10px); }
+        }
+        #main-advice {
+            font-size: 1.8em;
+            font-weight: 700;
+            color: #2980b9;
+            margin-bottom: 20px;
+            line-height: 1.4;
+        }
+        #detail-advice {
+            font-size: 1.1em;
+            color: #7f8c8d;
+            line-height: 1.6;
+        }
+        #loading {
+            font-size: 1.5em;
+            color: #555;
+        }
+        .footer {
+            margin-top: 30px;
+            font-size: 0.9em;
+            color: #aaa;
+        }
+
+        /* 날씨별 배경색 (예시) */
+        body.sunny { background-color: #87CEEB; } /* SkyBlue */
+        body.cloudy { background-color: #BDC3C7; } /* Silver */
+        body.rainy { background-color: #708090; }  /* SlateGray */
+        body.snowy { background-color: #E0FFFF; }  /* LightCyan */
+        body.bad-weather { background-color: #FF6347; } /* Tomato */
+    </style>
+</head>
+<body>
+    <div class="weather-card">
+        <p id="city-name">날씨 정보 로딩 중...</p>
+        <div id="weather-icon">☁️</div>
+        <h2 id="main-advice"></h2>
+        <p id="detail-advice"></p>
+        <div id="loading" style="display: none;">데이터를 가져오는 중...</div>
+    </div>
+    <div class="footer">
+        OpenWeatherMap API 기반 정보 제공
+    </div>
+
+    <script>
+        // TODO: 여기에 실제 Azure Function의 HTTP 트리거 URL을 붙여넣으세요.
+        const AZURE_FUNCTION_URL = "https://weather-forecast-aqcfdphpe6hkcxd9.koreacentral-01.azurewebsites.net/api/HttpTrigger1"; 
+
+        async function getLeisureAdvice() {
+            const loadingElement = document.getElementById('loading');
+            loadingElement.style.display = 'block';
+
+            try {
+                const response = await fetch(AZURE_FUNCTION_URL);
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                const data = await response.json();
+                
+                document.getElementById('city-name').innerText = data.city ? `${data.city}의 오늘 날씨` : '알 수 없는 지역';
+
+                const [conclusion, detailAdvice] = data.advice.split('\n\n[상세 조언]');
+                document.getElementById('main-advice').innerText = conclusion.trim();
+                document.getElementById('detail-advice').innerText = detailAdvice ? detailAdvice.trim() : '';
+                
+                // 날씨 아이콘 및 배경 변경 (간단한 로직 예시)
+                let icon = '❓';
+                let bgColorClass = '';
+
+                if (conclusion.includes('최고의 야외 활동 조건!')) {
+                    icon = '☀️'; // 맑음
+                    bgColorClass = 'sunny';
+                } else if (conclusion.includes('괜찮은 활동 조건!')) {
+                    icon = '🌤️'; // 부분적으로 맑음/구름
+                    bgColorClass = 'cloudy';
+                } else if (conclusion.includes('야외 활동을 잠시 미루세요.')) {
+                     if (detailAdvice && detailAdvice.includes('비, 눈 또는 폭풍우')) {
+                        icon = '☔'; // 비
+                        bgColorClass = 'rainy';
+                    } else if (detailAdvice && detailAdvice.includes('안개')) {
+                        icon = '🌫️'; // 안개
+                        bgColorClass = 'cloudy'; // 안개도 구름과 유사한 분위기
+                    } else if (detailAdvice && detailAdvice.includes('바람이 매우 강합니다.')) {
+                        icon = '🌬️'; // 강풍
+                        bgColorClass = 'cloudy'; 
+                    } else {
+                        icon = '⚠️'; // 경고
+                        bgColorClass = 'bad-weather';
+                    }
+                }
+                document.getElementById('weather-icon').innerText = icon;
+                document.body.className = bgColorClass; // 배경 클래스 변경
+
+            } catch (error) {
+                console.error("날씨 데이터를 가져오는 중 오류 발생:", error);
+                document.getElementById('city-name').innerText = "정보를 가져올 수 없습니다.";
+                document.getElementById('main-advice').innerText = "잠시 후 다시 시도해주세요.";
+                document.getElementById('detail-advice').innerText = "";
+                document.getElementById('weather-icon').innerText = '❌';
+                document.body.className = 'bad-weather';
+            } finally {
+                loadingElement.style.display = 'none';
+            }
+        }
+
+        getLeisureAdvice(); // 페이지 로드 시 함수 실행
+        // 5분마다 업데이트 (선택 사항)
+        // setInterval(getLeisureAdvice, 300 * 1000); 
+    </script>
+</body>
+</html>
